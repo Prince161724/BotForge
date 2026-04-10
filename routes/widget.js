@@ -36,6 +36,9 @@ router.get('/', (req, res) => {
   const protocol = req.protocol;
   const host = req.get('host');
   const API_BASE = protocol + '://' + host + '/api/chat/widget-stream';
+  const TRAIN_UPLOAD_URL = protocol + '://' + host + '/api/training/widget-upload/' + botId;
+  const TRAIN_STATUS_URL = protocol + '://' + host + '/api/training/widget-status/' + botId + '?token=' + encodeURIComponent(token);
+  const TRAIN_DELETE_URL = protocol + '://' + host + '/api/training/widget/' + botId + '?token=' + encodeURIComponent(token);
 
   // Same welcome messages as ChatWidget.jsx
   const welcomes = {
@@ -119,6 +122,63 @@ router.get('/', (req, res) => {
 }
 .bf-powered strong { color: ${bot.theme.primary}; font-weight: 600; }
 
+/* ====== TRAINING PANEL ====== */
+#bf-train-panel {
+  display: none; padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  background: rgba(10,10,10,0.95); z-index: 2; position: relative;
+}
+#bf-train-panel.bf-visible { display: block; animation: bf-slideDown 0.3s ease; }
+@keyframes bf-slideDown { from { opacity:0; transform:translateY(-10px); } to { opacity:1; transform:translateY(0); } }
+
+.bf-train-status {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; border-radius: 10px; font-size: 0.78rem; margin-bottom: 8px;
+}
+.bf-train-status.ready {
+  background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.2); color: #4ade80;
+}
+.bf-train-status.processing {
+  background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.2); color: #fbbf24;
+}
+.bf-train-status .bf-train-file { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600; }
+.bf-train-remove {
+  background: rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.2); color:#f87171;
+  padding: 4px 8px; border-radius: 6px; font-size: 0.7rem; cursor:pointer; font-family:inherit;
+}
+.bf-train-remove:hover { background: rgba(239,68,68,0.2); }
+
+.bf-train-dropzone {
+  border: 2px dashed rgba(255,255,255,0.12); border-radius: 12px;
+  padding: 1.25rem; text-align: center; cursor: pointer;
+  transition: all 0.2s; position: relative;
+}
+.bf-train-dropzone:hover { border-color: ${bot.theme.primary}; background: rgba(255,255,255,0.02); }
+.bf-train-dropzone.dragging { border-color: ${bot.theme.primary}; background: ${bot.theme.bg}; }
+.bf-train-dropzone p { font-size: 0.82rem; color: #d1d5db; margin-bottom: 4px; }
+.bf-train-dropzone small { font-size: 0.72rem; color: rgba(255,255,255,0.35); }
+.bf-train-dropzone .bf-selected-file {
+  display:flex; align-items:center; gap:8px; justify-content:center;
+  font-size:0.82rem; color: ${bot.theme.primary}; font-weight:600;
+}
+.bf-train-submit {
+  width: 100%; margin-top: 8px; border: none; color: #fff;
+  padding: 8px; border-radius: 10px; font-family: inherit;
+  font-size: 0.82rem; font-weight: 600; cursor: pointer;
+  background: ${bot.theme.gradient}; transition: all 0.2s;
+}
+.bf-train-submit:disabled { opacity:0.4; cursor:not-allowed; }
+.bf-train-submit:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 4px 15px ${bot.theme.glow}; }
+.bf-train-error { color:#f87171; font-size:0.75rem; margin-top:6px; text-align:center; }
+.bf-train-badge {
+  display:inline-flex; align-items:center; gap:3px;
+  padding:2px 7px; border-radius:20px; font-size:0.6rem; font-weight:700;
+  background:rgba(34,197,94,0.12); border:1px solid rgba(34,197,94,0.25);
+  color:#4ade80; text-transform:uppercase; margin-left:6px; letter-spacing:0.04em;
+}
+.bf-spin { animation: bf-spin-anim 1s linear infinite; display:inline-block; }
+@keyframes bf-spin-anim { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+
 ${cssCache}
 `;
 
@@ -131,6 +191,9 @@ ${cssCache}
   lines.push('var BOT_ID = ' + JSON.stringify(botId) + ';');
   lines.push('var TOKEN = ' + JSON.stringify(token) + ';');
   lines.push('var API = ' + JSON.stringify(API_BASE) + ';');
+  lines.push('var TRAIN_UPLOAD = ' + JSON.stringify(TRAIN_UPLOAD_URL) + ';');
+  lines.push('var TRAIN_STATUS = ' + JSON.stringify(TRAIN_STATUS_URL) + ';');
+  lines.push('var TRAIN_DELETE = ' + JSON.stringify(TRAIN_DELETE_URL) + ';');
   lines.push('var NAME = ' + JSON.stringify(bot.name) + ';');
   lines.push('var PRIMARY = ' + JSON.stringify(bot.theme.primary) + ';');
   lines.push('var SECONDARY = ' + JSON.stringify(bot.theme.secondary) + ';');
@@ -184,6 +247,7 @@ ${cssCache}
   const closeSVG = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
   // Send SVG
   const sendSVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>';
+  const uploadSVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>';
 
   const overlayHTML = '<div id="bf-overlay" class="chat-widget-overlay ' + posClass + '">'
     + '<div id="bf-widget" class="chat-widget anim-' + layout.position + ' ' + posClass + '" '
@@ -193,14 +257,25 @@ ${cssCache}
     + '<div class="cw-header-left">'
     + '<div class="cw-avatar" style="background:' + bot.theme.gradient + '">' + sparklesAvatarSVG + '</div>'
     + '<div>'
-    + '<h3 class="cw-name">' + bot.name + '</h3>'
+    + '<h3 class="cw-name"><span id="bf-bot-name">' + bot.name + '</span></h3>'
     + '<span class="cw-status"><span class="cw-status-dot" style="background:' + bot.theme.primary + '"></span><span id="bf-status-text">Online</span></span>'
     + '</div>'
     + '</div>'
     + '<div class="cw-header-right">'
+    + '<button class="cw-icon-btn" id="bf-train-btn" title="Train with PDF">' + uploadSVG + '</button>'
     + '<button class="cw-icon-btn" id="bf-clear" title="Clear history">' + trashSVG + '</button>'
     + '<button class="cw-icon-btn" id="bf-close">' + closeSVG + '</button>'
     + '</div>'
+    + '</div>'
+    + '<div id="bf-train-panel">'
+    + '<div id="bf-train-status-area"></div>'
+    + '<div id="bf-train-dropzone" class="bf-train-dropzone">'
+    + '<p><strong style="color:' + bot.theme.primary + '">Drop PDF here</strong> or click to browse</p>'
+    + '<small>PDF only • Max 10MB</small>'
+    + '</div>'
+    + '<input type="file" id="bf-train-file" accept=".pdf" style="display:none" />'
+    + '<button id="bf-train-submit" class="bf-train-submit" disabled>Train ' + bot.name + '</button>'
+    + '<div id="bf-train-error" class="bf-train-error" style="display:none"></div>'
     + '</div>'
     + '<div id="bf-msgs" class="cw-messages"></div>'
     + '<div class="cw-input-area">'
@@ -391,6 +466,147 @@ ${cssCache}
   lines.push('      sendBtn.style.boxShadow = "";');
   lines.push('    }');
   lines.push('  };');
+
+  // ── TRAINING LOGIC ──────────────────────────────────
+  lines.push('');
+  lines.push('  // Training elements');
+  lines.push('  var trainBtn = shadow.querySelector("#bf-train-btn");');
+  lines.push('  var trainPanel = shadow.querySelector("#bf-train-panel");');
+  lines.push('  var trainDropzone = shadow.querySelector("#bf-train-dropzone");');
+  lines.push('  var trainFileInput = shadow.querySelector("#bf-train-file");');
+  lines.push('  var trainSubmit = shadow.querySelector("#bf-train-submit");');
+  lines.push('  var trainError = shadow.querySelector("#bf-train-error");');
+  lines.push('  var trainStatusArea = shadow.querySelector("#bf-train-status-area");');
+  lines.push('  var botNameEl = shadow.querySelector("#bf-bot-name");');
+  lines.push('  var selectedPDF = null;');
+  lines.push('  var trainPollTimer = null;');
+  lines.push('');
+
+  // Toggle panel
+  lines.push('  trainBtn.onclick = function(e) {');
+  lines.push('    e.stopPropagation();');
+  lines.push('    trainPanel.classList.toggle("bf-visible");');
+  lines.push('  };');
+  lines.push('');
+
+  // Dropzone click
+  lines.push('  trainDropzone.onclick = function() { trainFileInput.click(); };');
+  lines.push('');
+
+  // Drag & drop
+  lines.push('  trainDropzone.ondragover = function(e) { e.preventDefault(); trainDropzone.classList.add("dragging"); };');
+  lines.push('  trainDropzone.ondragleave = function(e) { e.preventDefault(); trainDropzone.classList.remove("dragging"); };');
+  lines.push('  trainDropzone.ondrop = function(e) {');
+  lines.push('    e.preventDefault(); trainDropzone.classList.remove("dragging");');
+  lines.push('    var file = e.dataTransfer.files[0];');
+  lines.push('    if(file) selectFile(file);');
+  lines.push('  };');
+  lines.push('');
+
+  // File input change
+  lines.push('  trainFileInput.onchange = function() { if(trainFileInput.files[0]) selectFile(trainFileInput.files[0]); };');
+  lines.push('');
+
+  // selectFile
+  lines.push('  function selectFile(file) {');
+  lines.push('    trainError.style.display = "none";');
+  lines.push('    if(file.type !== "application/pdf") { showTrainError("Only PDF files allowed."); return; }');
+  lines.push('    if(file.size > 10*1024*1024) { showTrainError("File too large (max 10MB)."); return; }');
+  lines.push('    selectedPDF = file;');
+  lines.push('    trainDropzone.innerHTML = \'<div class="bf-selected-file">\\u{1F4C4} <span>\' + file.name + " (" + (file.size/(1024*1024)).toFixed(1) + " MB)</span></div>";');
+  lines.push('    trainSubmit.disabled = false;');
+  lines.push('  }');
+  lines.push('');
+
+  // showTrainError
+  lines.push('  function showTrainError(msg) {');
+  lines.push('    trainError.textContent = msg;');
+  lines.push('    trainError.style.display = "block";');
+  lines.push('  }');
+  lines.push('');
+
+  // Upload submit
+  lines.push('  trainSubmit.onclick = function() {');
+  lines.push('    if(!selectedPDF) return;');
+  lines.push('    trainSubmit.disabled = true;');
+  lines.push('    trainSubmit.textContent = "Uploading...";');
+  lines.push('    trainError.style.display = "none";');
+  lines.push('    var fd = new FormData();');
+  lines.push('    fd.append("widgetToken", TOKEN);');
+  lines.push('    fd.append("pdf", selectedPDF);');
+  lines.push('    fetch(TRAIN_UPLOAD, { method: "POST", body: fd })');
+  lines.push('      .then(function(r) { return r.json(); })');
+  lines.push('      .then(function(data) {');
+  lines.push('        if(data.status === "processing") {');
+  lines.push('          renderTrainStatus("processing", data.fileName);');
+  lines.push('          startTrainPoll();');
+  lines.push('          resetDropzone();');
+  lines.push('        } else {');
+  lines.push('          showTrainError(data.error || "Upload failed.");');
+  lines.push('          trainSubmit.disabled = false;');
+  lines.push('        }');
+  lines.push('        trainSubmit.textContent = "Train " + NAME;');
+  lines.push('      })');
+  lines.push('      .catch(function() {');
+  lines.push('        showTrainError("Network error. Try again.");');
+  lines.push('        trainSubmit.disabled = false;');
+  lines.push('        trainSubmit.textContent = "Train " + NAME;');
+  lines.push('      });');
+  lines.push('  };');
+  lines.push('');
+
+  // resetDropzone
+  lines.push('  function resetDropzone() {');
+  lines.push('    selectedPDF = null;');
+  lines.push('    trainDropzone.innerHTML = \'<p><strong style="color:\' + PRIMARY + \'">Drop PDF here</strong> or click to browse</p><small>PDF only \\u2022 Max 10MB</small>\';');
+  lines.push('    trainSubmit.disabled = true;');
+  lines.push('  }');
+  lines.push('');
+
+  // renderTrainStatus
+  lines.push('  function renderTrainStatus(status, fileName) {');
+  lines.push('    if(status === "ready") {');
+  lines.push('      trainStatusArea.innerHTML = \'<div class="bf-train-status ready">\\u2705 <span class="bf-train-file">\' + fileName + \'</span><button class="bf-train-remove" id="bf-remove-train">Remove</button></div>\';');
+  lines.push('      var removeBtn = shadow.querySelector("#bf-remove-train");');
+  lines.push('      if(removeBtn) removeBtn.onclick = deleteTrain;');
+  lines.push('      botNameEl.innerHTML = NAME + \'<span class="bf-train-badge">PDF</span>\';');
+  lines.push('    } else if(status === "processing") {');
+  lines.push('      trainStatusArea.innerHTML = \'<div class="bf-train-status processing"><span class="bf-spin">\\u23F3</span> Training on <span class="bf-train-file">\' + fileName + \'</span></div>\';');
+  lines.push('    } else {');
+  lines.push('      trainStatusArea.innerHTML = "";');
+  lines.push('      botNameEl.textContent = NAME;');
+  lines.push('    }');
+  lines.push('  }');
+  lines.push('');
+
+  // Poll for training completion
+  lines.push('  function startTrainPoll() {');
+  lines.push('    if(trainPollTimer) clearInterval(trainPollTimer);');
+  lines.push('    var maxPolls = 60; var pollCount = 0;');
+  lines.push('    trainPollTimer = setInterval(function() {');
+  lines.push('      pollCount++;');
+  lines.push('      fetch(TRAIN_STATUS).then(function(r){return r.json();}).then(function(d) {');
+  lines.push('        if(d.status === "ready") { clearInterval(trainPollTimer); trainPollTimer=null; renderTrainStatus("ready", d.fileName); }');
+  lines.push('        else if(d.status === "failed" || !d.trained || pollCount >= maxPolls) { clearInterval(trainPollTimer); trainPollTimer=null; showTrainError("Training failed. Try again."); trainStatusArea.innerHTML=""; }');
+  lines.push('      }).catch(function(){ if(pollCount >= maxPolls){ clearInterval(trainPollTimer); trainPollTimer=null; } });');
+  lines.push('    }, 3000);');
+  lines.push('  }');
+  lines.push('');
+
+  // Delete training
+  lines.push('  function deleteTrain() {');
+  lines.push('    fetch(TRAIN_DELETE, { method: "DELETE" })');
+  lines.push('      .then(function(r){return r.json();})');
+  lines.push('      .then(function() { renderTrainStatus(null); })');
+  lines.push('      .catch(function(){});');
+  lines.push('  }');
+  lines.push('');
+
+  // Check initial training status on load
+  lines.push('  fetch(TRAIN_STATUS).then(function(r){return r.json();}).then(function(d) {');
+  lines.push('    if(d.trained && d.status === "ready") renderTrainStatus("ready", d.fileName);');
+  lines.push('    if(d.trained && d.status === "processing") { renderTrainStatus("processing", d.fileName); startTrainPoll(); }');
+  lines.push('  }).catch(function(){});');
 
   lines.push('}'); // end initWidget
 

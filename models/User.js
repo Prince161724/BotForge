@@ -30,6 +30,13 @@ const userSchema = new mongoose.Schema({
   purchasedBots: [{
     type: String // bot style IDs like 'nebula', 'ember', etc.
   }],
+  trainedBots: [{
+    botId: { type: String, required: true },
+    fileName: { type: String, default: '' },
+    status: { type: String, enum: ['processing', 'ready', 'failed'], default: 'processing' },
+    trainedAt: { type: Date, default: Date.now },
+    namespace: { type: String, required: true } // Pinecone namespace: userId_botId
+  }],
   createdAt: {
     type: Date,
     default: Date.now

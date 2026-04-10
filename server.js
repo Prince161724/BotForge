@@ -8,6 +8,7 @@ const shopRoutes = require('./routes/shop');
 const chatRoutes = require('./routes/chat');
 const supportRoutes = require('./routes/support');
 const widgetRoutes = require('./routes/widget');
+const trainingRoutes = require('./routes/training');
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -36,6 +37,7 @@ app.use('/api/shop', shopRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/widget.js', widgetRoutes);
+app.use('/api/training', trainingRoutes);
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({

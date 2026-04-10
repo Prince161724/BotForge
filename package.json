@@ -11,6 +11,7 @@
     "dev": "nodemon server.js"
   },
   "dependencies": {
+    "@pinecone-database/pinecone": "^7.1.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -18,7 +19,9 @@
     "google-auth-library": "^9.6.3",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.2.0",
-    "openai": "^4.33.0"
+    "multer": "^2.1.1",
+    "openai": "^4.33.0",
+    "pdf-parse": "^1.1.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"
